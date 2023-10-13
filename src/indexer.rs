@@ -3,6 +3,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::process;
 use walkdir::{DirEntry, WalkDir};
 
 fn is_hidden(entry: &DirEntry) -> bool {
@@ -19,10 +20,14 @@ fn is_hidden(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+struct Index {
+    content: Vec<String>,
+    fn_offsets: HashMap<String, usize>,
+}
+
 pub struct Indexer {
     project_dir: String,
-    content: HashMap<String, Vec<String>>,
-    funcs: HashMap<String, Vec<(String, usize)>>,
+    index: HashMap<String, Index>,
     fre: Regex,
     afre: Regex,
 }
@@ -31,8 +36,7 @@ impl Indexer {
     pub fn new(project_dir: &str) -> Indexer {
         Indexer {
             project_dir: project_dir.to_string(),
-            content: HashMap::new(),
-            funcs: HashMap::new(),
+            index: HashMap::new(),
             fre: Regex::new(r"^\s*function\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\(").unwrap(),
             afre: Regex::new(r"^\s*(const|let|var)\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s+=\s+\(").unwrap(),
         }
@@ -56,15 +60,21 @@ impl Indexer {
     fn store_content(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
         let content: Vec<String> = fs::read_to_string(file_path)?
             .lines()
-            .map(|s| s.to_string())
+            .map(|s| s.trim().to_string())
             .collect();
-        self.content.insert(file_path.to_string(), content);
+        self.index.insert(
+            file_path.to_string(),
+            Index {
+                content,
+                fn_offsets: HashMap::new(),
+            },
+        );
         Ok(())
     }
 
     fn find_funcs(&self, file_path: &str) -> Result<Vec<(String, usize)>, String> {
-        let content = match self.content.get(&file_path.to_string()) {
-            Some(c) => c,
+        let content = match self.index.get(&file_path.to_string()) {
+            Some(c) => &c.content,
             None => return Err("content not found".to_string()),
         };
 
@@ -84,15 +94,23 @@ impl Indexer {
         let funcs = self.find_funcs(file_path)?;
 
         for (func_name, pos) in funcs {
-            println!("{}", func_name);
-
-            self.funcs
-                .entry(file_path.to_string())
-                .or_insert(Vec::new())
-                .push((func_name, pos + 1));
+            self.index.entry(file_path.to_string()).and_modify(|f| {
+                f.fn_offsets.insert(func_name, pos);
+            });
         }
-        println!("{:?}", self.funcs);
 
         Ok(())
+    }
+
+    pub fn get_fn_content(&self, func_name: &str, path: &str) -> impl Iterator<Item = &String> {
+        let index = self.index.get(path).unwrap_or_else(|| {
+            eprintln!("Failed to to find {path} index record");
+            process::exit(1);
+        });
+        let offset = index.fn_offsets.get(func_name).unwrap_or_else(|| {
+            eprintln!("Failed to to find {func_name} offset");
+            process::exit(1);
+        });
+        index.content.iter().skip(*offset)
     }
 }
