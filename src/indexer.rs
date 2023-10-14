@@ -3,8 +3,11 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::path::Path;
 use std::process;
 use walkdir::{DirEntry, WalkDir};
+
+use crate::utils::OptionIterator;
 
 fn is_hidden(entry: &DirEntry) -> bool {
     let file_type = entry.file_type();
@@ -20,16 +23,26 @@ fn is_hidden(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
+type FilePath = String;
+
 struct Index {
     content: Vec<String>,
     fn_offsets: HashMap<String, usize>,
+    fn_imports: HashMap<String, FilePath>,
+}
+
+impl Index {
+    fn find_local_fn_offset(&self, func_name: &str) -> Option<&usize> {
+        self.fn_offsets.get(func_name)
+    }
 }
 
 pub struct Indexer {
     project_dir: String,
-    index: HashMap<String, Index>,
+    index: HashMap<FilePath, Index>,
     fre: Regex,
     afre: Regex,
+    ifre: Regex,
 }
 
 impl Indexer {
@@ -39,6 +52,7 @@ impl Indexer {
             index: HashMap::new(),
             fre: Regex::new(r"^\s*function\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\(").unwrap(),
             afre: Regex::new(r"^\s*(const|let|var)\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s+=\s+\(").unwrap(),
+            ifre: Regex::new(r##"^\s*(const|let|var)\s+\{\s*([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\}\s+=\s+require\((\"|')(.*)(\"|')"##).unwrap(),
         }
     }
 
@@ -50,11 +64,49 @@ impl Indexer {
             .filter_map(|file| file.ok())
             .filter(|file| file.file_type().is_file())
         {
-            let file_path = file.path().display().to_string();
-            self.read_file(&file_path)?;
+            let file_path = file.path().canonicalize().unwrap().display().to_string();
+            self.index_file(&file_path)?;
         }
 
         Ok(())
+    }
+
+    pub fn iter_fn_content(
+        &self,
+        func_name: &str,
+        path: &str,
+    ) -> OptionIterator<impl Iterator<Item = &String>> {
+        let absolute_path = Path::new(path)
+            .canonicalize()
+            .unwrap()
+            .display()
+            .to_string();
+
+        // try local functions
+        let index = self.get_index(&absolute_path);
+        if let Some(offset) = index.find_local_fn_offset(func_name) {
+            return OptionIterator {
+                iter: Some(index.content.iter().skip(*offset)),
+            };
+        }
+
+        // try imported functions
+        let import_path = match index.fn_imports.get(func_name) {
+            Some(p) => p,
+            None => {
+                println!(
+                    "Unabled to find function reference for {} in {}",
+                    func_name, path
+                );
+                return OptionIterator { iter: None };
+            }
+        };
+        let index = self.get_index(&import_path);
+        let offset = index.find_local_fn_offset(func_name).unwrap();
+
+        OptionIterator {
+            iter: Some(index.content.iter().skip(*offset)),
+        }
     }
 
     fn store_content(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
@@ -62,11 +114,13 @@ impl Indexer {
             .lines()
             .map(|s| s.trim().to_string())
             .collect();
+
         self.index.insert(
             file_path.to_string(),
             Index {
                 content,
                 fn_offsets: HashMap::new(),
+                fn_imports: HashMap::new(),
             },
         );
         Ok(())
@@ -89,28 +143,55 @@ impl Indexer {
         Ok(funcs)
     }
 
-    fn read_file(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
-        self.store_content(file_path)?;
-        let funcs = self.find_funcs(file_path)?;
+    fn find_fn_imports(&self, file_path: &str) -> Vec<(String, String)> {
+        let content = match self.index.get(&file_path.to_string()) {
+            Some(c) => &c.content,
+            None => process::exit(1),
+        };
 
+        let mut funcs = vec![];
+        for line in content.iter() {
+            if let Some(cap) = self.ifre.captures(&line) {
+                let fname = cap[2].to_string();
+                let jump = cap[4].to_string();
+                funcs.push((fname, jump));
+            }
+        }
+        funcs
+    }
+
+    fn index_file(&mut self, file_path: &str) -> Result<(), Box<dyn Error>> {
+        self.store_content(file_path)?;
+
+        let funcs = self.find_funcs(file_path)?;
         for (func_name, pos) in funcs {
             self.index.entry(file_path.to_string()).and_modify(|f| {
                 f.fn_offsets.insert(func_name, pos);
             });
         }
 
+        let imports = self.find_fn_imports(file_path);
+        for (func_name, import_path) in imports {
+            self.index.entry(file_path.to_string()).and_modify(|f| {
+                let path = Path::new(file_path)
+                    .parent()
+                    .unwrap()
+                    .join(format!("{}.js", import_path))
+                    .canonicalize()
+                    .unwrap()
+                    .display()
+                    .to_string();
+                f.fn_imports.insert(func_name, path); // fixme: add path
+            });
+        }
+
         Ok(())
     }
 
-    pub fn get_fn_content(&self, func_name: &str, path: &str) -> impl Iterator<Item = &String> {
-        let index = self.index.get(path).unwrap_or_else(|| {
+    fn get_index(&self, path: &str) -> &Index {
+        self.index.get(path).unwrap_or_else(|| {
             eprintln!("Failed to to find {path} index record");
             process::exit(1);
-        });
-        let offset = index.fn_offsets.get(func_name).unwrap_or_else(|| {
-            eprintln!("Failed to to find {func_name} offset");
-            process::exit(1);
-        });
-        index.content.iter().skip(*offset)
+        })
     }
 }

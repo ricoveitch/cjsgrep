@@ -3,7 +3,7 @@ use codegrep::searcher::Searcher;
 use std::process;
 
 fn main() {
-    let path = "data/sameFile.js";
+    let path = "data/mixed";
     let mut indexer = Indexer::new(path);
 
     if let Err(e) = indexer.index() {
@@ -12,7 +12,10 @@ fn main() {
     }
 
     let start_func = "foo";
-    let text = "obj.y";
+    let text = "obj.lar";
     let searcher = Searcher::new(indexer);
-    searcher.search(start_func, path, text);
+
+    for g in searcher.search(start_func, "data/mixed/index.js", text) {
+        println!("{}", g);
+    }
 }
