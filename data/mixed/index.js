@@ -8,7 +8,7 @@ function foo() {
   obj.x = x;
   baz(x);
   fixed(x);
-  lar.lar(x);
+  lar.foo(x);
 }
 
 function bar(obj) {

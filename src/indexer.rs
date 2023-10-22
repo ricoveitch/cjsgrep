@@ -52,7 +52,7 @@ impl Indexer {
             index: HashMap::new(),
             fre: Regex::new(r"^\s*function\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\(").unwrap(),
             afre: Regex::new(r"^\s*(const|let|var)\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s+=\s+\(").unwrap(),
-            ifre: Regex::new(r##"^\s*(const|let|var)\s+\{\s*([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\}\s+=\s+require\((\"|')(.*)(\"|')"##).unwrap(),
+            ifre: Regex::new(r##"^\s*(const|let|var)\s+\{?\s*([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\}?\s+=\s+require\((\"|')(.*)(\"|')\)"##).unwrap(),
         }
     }
 
@@ -73,10 +73,11 @@ impl Indexer {
 
     pub fn iter_fn_content(
         &self,
+        file_path: &str,
         func_name: &str,
-        path: &str,
+        object: Option<String>,
     ) -> OptionIterator<impl Iterator<Item = &String>> {
-        let absolute_path = Path::new(path)
+        let absolute_path = Path::new(file_path)
             .canonicalize()
             .unwrap()
             .display()
@@ -84,23 +85,31 @@ impl Indexer {
 
         // try local functions
         let index = self.get_index(&absolute_path);
-        if let Some(offset) = index.find_local_fn_offset(func_name) {
-            return OptionIterator {
-                iter: Some(index.content.iter().skip(*offset)),
-            };
+        if object.is_none() {
+            if let Some(offset) = index.find_local_fn_offset(func_name) {
+                return OptionIterator {
+                    iter: Some(index.content.iter().skip(*offset)),
+                };
+            }
         }
 
         // try imported functions
-        let import_path = match index.fn_imports.get(func_name) {
+        let import = match &object {
+            Some(object) => object,
+            None => func_name,
+        };
+
+        let import_path = match index.fn_imports.get(import) {
             Some(p) => p,
             None => {
                 println!(
                     "Unabled to find function reference for {} in {}",
-                    func_name, path
+                    func_name, file_path
                 );
                 return OptionIterator { iter: None };
             }
         };
+
         let index = self.get_index(&import_path);
         let offset = index.find_local_fn_offset(func_name).unwrap();
 

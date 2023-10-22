@@ -1,7 +1,7 @@
-function lar(obj) {
+function foo(obj) {
   obj.lar = "lar";
 }
 
 module.exports = {
-  lar,
+  foo,
 };
