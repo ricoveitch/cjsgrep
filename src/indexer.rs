@@ -7,7 +7,10 @@ use std::path::Path;
 use std::process;
 use walkdir::{DirEntry, WalkDir};
 
-use crate::utils::OptionIterator;
+use crate::{
+    logger,
+    utils::{path_exists, OptionIterator},
+};
 
 fn is_hidden(entry: &DirEntry) -> bool {
     let file_type = entry.file_type();
@@ -59,16 +62,28 @@ impl Indexer {
         }
     }
 
-    pub fn index(&mut self) -> Result<(), Box<dyn Error>> {
-        let walker = WalkDir::new(&self.project_dir).into_iter();
+    pub fn index(&mut self) -> Result<(), String> {
+        if !path_exists(&self.project_dir) {
+            return Err(format!(
+                "no such file or directory exists for {}",
+                self.project_dir
+            ));
+        }
 
-        for file in walker
+        for file in WalkDir::new(&self.project_dir)
+            .into_iter()
             .filter_entry(|e| !is_hidden(e))
             .filter_map(|file| file.ok())
             .filter(|file| file.file_type().is_file())
         {
             let file_path = file.path().canonicalize().unwrap().display().to_string();
-            self.index_file(&file_path)?;
+            if let Err(e) = self.index_file(&file_path) {
+                return Err(format!("failed to parse file {}", e));
+            }
+        }
+
+        if self.index.is_empty() {
+            return Err(format!("no files were found in {}", self.project_dir));
         }
 
         Ok(())
@@ -105,10 +120,10 @@ impl Indexer {
         let import_path = match index.fn_imports.get(import) {
             Some(p) => p,
             None => {
-                println!(
-                    "Unabled to find function reference for {} in {}",
+                logger::warn(&format!(
+                    "Unable to find function reference for {} in {}",
                     func_name, file_path
-                );
+                ));
                 return OptionIterator { iter: None };
             }
         };
@@ -203,7 +218,7 @@ impl Indexer {
 
     fn get_index(&self, path: &str) -> &Index {
         self.index.get(path).unwrap_or_else(|| {
-            eprintln!("Failed to to find {} index record", path);
+            logger::err(&format!("Failed to to find {} index record", path));
             process::exit(1);
         })
     }

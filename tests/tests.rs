@@ -7,7 +7,9 @@ fn search(target: &str) -> Vec<String> {
 
     let searcher = Searcher::new(indexer);
 
-    searcher.search("foo", "data/mixed/index.js", target)
+    searcher
+        .search("foo", "data/mixed/index.js", target)
+        .unwrap()
 }
 
 #[cfg(test)]

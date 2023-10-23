@@ -1,4 +1,4 @@
-use crate::indexer::Indexer;
+use crate::{indexer::Indexer, utils::is_file};
 use regex::Regex;
 
 fn has_fn_call(token: &str) -> Option<(Option<String>, String)> {
@@ -25,11 +25,15 @@ impl Searcher {
         return Searcher { indexer };
     }
 
-    pub fn search(&self, func: &str, file_path: &str, target: &str) -> Vec<String> {
+    pub fn search(&self, func: &str, file_path: &str, target: &str) -> Result<Vec<String>, String> {
+        if !is_file(file_path) {
+            return Err(format!("no such file exists {}", file_path));
+        }
+
         let mut results = Vec::new();
 
         self.traverse(&mut results, func, file_path, target, None);
-        results
+        Ok(results)
     }
 
     fn traverse(
