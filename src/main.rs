@@ -12,7 +12,7 @@ fn main() {
     }
 
     let start_func = "foo";
-    let text = "obj.lar";
+    let text = "obj.double";
     let searcher = Searcher::new(indexer);
 
     for g in searcher.search(start_func, "data/mixed/index.js", text) {

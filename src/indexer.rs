@@ -50,9 +50,12 @@ impl Indexer {
         Indexer {
             project_dir: project_dir.to_string(),
             index: HashMap::new(),
-            fre: Regex::new(r"^\s*function\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\(").unwrap(),
-            afre: Regex::new(r"^\s*(const|let|var)\s+([a-zA-Z_$][0-9a-zA-Z_$]*)\s+=\s+\(").unwrap(),
-            ifre: Regex::new(r##"^\s*(const|let|var)\s+\{?\s*([a-zA-Z_$][0-9a-zA-Z_$]*)\s*\}?\s+=\s+require\((\"|')(.*)(\"|')\)"##).unwrap(),
+            fre: Regex::new(r"^\s*function\s+(\w*)\s*\(").unwrap(),
+            afre: Regex::new(r"^\s*(const|let|var)\s+(\w*)\s+=\s+\(").unwrap(),
+            ifre: Regex::new(
+                r##"(const|let|var)\s*\{?([\s\w,]+)\}?\s*=\s*require\(['"]([\w\.\/]+)['"]\)"##,
+            )
+            .unwrap(),
         }
     }
 
@@ -159,13 +162,14 @@ impl Indexer {
         };
 
         let mut funcs = vec![];
-        for line in content.iter() {
-            if let Some(cap) = self.ifre.captures(&line) {
-                let fname = cap[2].to_string();
-                let jump = cap[4].to_string();
-                funcs.push((fname, jump));
+        for cap in self.ifre.captures_iter(&content.join("\n")) {
+            let jump = cap[3].to_string();
+            let func_names: Vec<&str> = cap[2].split(',').collect();
+            for fname in func_names {
+                funcs.push((fname.trim().to_string(), jump.to_owned()));
             }
         }
+
         funcs
     }
 
@@ -199,7 +203,7 @@ impl Indexer {
 
     fn get_index(&self, path: &str) -> &Index {
         self.index.get(path).unwrap_or_else(|| {
-            eprintln!("Failed to to find {path} index record");
+            eprintln!("Failed to to find {} index record", path);
             process::exit(1);
         })
     }
