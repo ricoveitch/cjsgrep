@@ -1,4 +1,5 @@
-use std::fs;
+use std::path::Path;
+use std::{fs, io};
 
 pub struct OptionIterator<I> {
     pub iter: Option<I>,
@@ -35,5 +36,12 @@ pub fn is_file(path: &str) -> bool {
     match fs::metadata(path) {
         Ok(f) => f.is_file(),
         Err(_) => false,
+    }
+}
+
+pub fn get_absolute_path(path: &str) -> io::Result<String> {
+    match Path::new(path).canonicalize() {
+        Ok(pb) => Ok(pb.display().to_string()),
+        Err(e) => Err(e),
     }
 }

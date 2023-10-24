@@ -50,7 +50,10 @@ impl Searcher {
             }
 
             if line.contains(target) {
-                results.push(format!("GREP: ({}): {}", func_name, line));
+                results.push(format!(
+                    "GREP: {} (path={}, function={})",
+                    line, file_path, func_name,
+                ));
             }
 
             if let Some(call) = has_fn_call(line) {

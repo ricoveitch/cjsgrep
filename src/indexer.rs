@@ -9,7 +9,7 @@ use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     logger,
-    utils::{path_exists, OptionIterator},
+    utils::{get_absolute_path, path_exists, OptionIterator},
 };
 
 fn is_hidden(entry: &DirEntry) -> bool {
@@ -95,11 +95,7 @@ impl Indexer {
         func_name: &str,
         object: Option<String>,
     ) -> OptionIterator<impl Iterator<Item = &String>> {
-        let absolute_path = Path::new(file_path)
-            .canonicalize()
-            .unwrap()
-            .display()
-            .to_string();
+        let absolute_path = get_absolute_path(file_path).unwrap();
 
         // try local functions
         let index = self.get_index(&absolute_path);
