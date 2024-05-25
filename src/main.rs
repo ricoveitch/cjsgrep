@@ -1,45 +1,23 @@
-use clap::Parser;
-use codegrep::indexer::Indexer;
-use codegrep::logger;
-use codegrep::searcher::Searcher;
-use std::process;
+use codegrep::{parser::Parser, visitor::ASTVisitor};
+use std::{fs, process};
 
-#[derive(Parser, Debug)]
-struct Cli {
-    project_path: String,
-
-    #[arg(short = 't', long)]
-    pattern: String,
-
-    #[arg(short = 'f', long)]
-    start_func_name: String,
-
-    #[arg(short = 'p', long)]
-    start_func_path: String,
-}
-
-fn main() {
-    let args = Cli::parse();
-
-    let mut indexer = Indexer::new(&args.project_path);
-
-    if let Err(e) = indexer.index() {
-        logger::err(&format!("Failed to parse project: {e}"));
-        process::exit(1);
-    }
-
-    let searcher = Searcher::new(indexer);
-
-    let results = match searcher.search(&args.start_func_name, &args.start_func_path, &args.pattern)
-    {
-        Ok(res) => res,
-        Err(e) => {
-            logger::err(&format!("Failed to search for pattern: {e}"));
+fn parse_file() {
+    let filename = "./data/parser-test.js";
+    let src = match fs::read_to_string(filename) {
+        Ok(s) => s,
+        Err(err) => {
+            eprintln!("failed to read file: {}", err.to_string());
             process::exit(1);
         }
     };
 
-    for g in results {
-        logger::info(&g);
-    }
+    let program = Parser::new(&src).parse();
+    // println!("{:?}", program);
+
+    let mut visitor = ASTVisitor::new(&src, "pin");
+    let _ = visitor.search(&program, Some("foo"));
+}
+
+fn main() {
+    parse_file();
 }

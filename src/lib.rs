@@ -1,4 +1,6 @@
-pub mod indexer;
+pub mod ast;
+pub mod lexer;
 pub mod logger;
-pub mod searcher;
+pub mod parser;
 pub mod utils;
+pub mod visitor;
