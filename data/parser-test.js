@@ -1,6 +1,6 @@
 function abc(a) {
   //xxxx
-  pin.code = 1;
+  pin.abc_outer = 1;
 }
 
 const arrow = () => {
@@ -9,14 +9,18 @@ const arrow = () => {
 
 function foo() {
   if (true) {
-    1;
+    const abc = () => {
+      let pin = a;
+    };
+    abc();
   }
-  const pin = 1;
+  let pin = b;
   abc(pin);
   //pin
   const abc = (pin) => {
-    let pin = 1;
+    let pin = c;
   };
+  arrow();
 }
 
 foo();

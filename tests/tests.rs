@@ -20,11 +20,13 @@ mod tests {
 
         let str_out = String::from_utf8_lossy(&bytes).to_string();
         let expected_out = vec![
-            "const pin = 1;",
-            "abc(pin)",
+            "let pin = a;",
+            "let pin = b;",
+            "abc(pin);",
             "const abc = (pin) => {",
-            "let pin = 1;",
+            "let pin = c;",
             "//pin",
+            "moo(pin);",
         ];
         let mut lines: Vec<&str> = str_out.split("\n").collect();
         lines.pop();
