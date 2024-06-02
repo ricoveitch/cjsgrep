@@ -46,12 +46,12 @@ impl Parser {
     }
 
     fn program(&mut self) -> ASTNode {
-        let start = self.lexer.line_num;
+        let start = self.lexer.cursor.line_num;
         let statement_list = self.statement_list();
         ASTNode::Program(Program {
             lines: Box::new(statement_list),
             start,
-            end: self.lexer.line_num,
+            end: self.lexer.cursor.line_num,
         })
     }
 
@@ -121,7 +121,7 @@ impl Parser {
     }
 
     fn variable_statement(&mut self) -> Option<ASTNode> {
-        let start = self.lexer.line_num;
+        let start = self.lexer.cursor.line_num;
         self.advance_token();
         let var_name = self.eat_identifier();
         self.eat(&TokenType::Equals);
@@ -135,11 +135,11 @@ impl Parser {
                     name: var_name,
                     body: Box::new(body),
                     start,
-                    end: self.lexer.line_num,
+                    end: self.lexer.cursor.line_num,
                 }))
             }
             TokenType::OpenBraces => {
-                //TODO: object decleration...
+                //TODO: object declaration...
                 None
             }
             TokenType::Identifier(ident) => self.parse_identifier(ident.to_string()),
@@ -148,14 +148,14 @@ impl Parser {
     }
 
     fn call_expression(&mut self, base: ASTNode) -> ASTNode {
-        let start = self.lexer.line_num;
+        let start = self.lexer.cursor.line_num;
         self.advance_token_till(TokenType::CloseParen);
         self.eat(&TokenType::CloseParen);
 
         let call_expression = ASTNode::CallExpression(CallExpression {
             base: Box::new(base),
             start,
-            end: self.lexer.line_num,
+            end: self.lexer.cursor.line_num,
         });
 
         if self.curr_token == TokenType::Dot {
@@ -168,12 +168,12 @@ impl Parser {
     fn parse_identifier(&mut self, ident: String) -> Option<ASTNode> {
         match self.lookahead(1) {
             TokenType::OpenParen => {
-                let start = self.lexer.line_num;
+                let start = self.lexer.cursor.line_num;
                 self.advance_token();
                 Some(self.call_expression(ASTNode::Identifier(Identifier {
                     name: ident,
                     start,
-                    end: self.lexer.line_num,
+                    end: self.lexer.cursor.line_num,
                 })))
             }
             _ => {
@@ -195,7 +195,7 @@ impl Parser {
     }
 
     fn block_statement(&mut self) -> ASTNode {
-        let start = self.lexer.line_num;
+        let start = self.lexer.cursor.line_num;
         self.eat(&TokenType::OpenBraces);
         let body = self.block_body();
         self.eat(&TokenType::CloseBraces);
@@ -203,12 +203,12 @@ impl Parser {
         ASTNode::BlockStatement(BlockStatement {
             body: Box::new(body),
             start,
-            end: self.lexer.line_num,
+            end: self.lexer.cursor.line_num,
         })
     }
 
     fn function_expression(&mut self) -> ASTNode {
-        let start = self.lexer.line_num;
+        let start = self.lexer.cursor.line_num;
         self.advance_token();
         let name = self.eat_identifier();
         self.advance_token_till(TokenType::OpenBraces);
@@ -218,7 +218,7 @@ impl Parser {
             name,
             body: Box::new(body),
             start,
-            end: self.lexer.line_num,
+            end: self.lexer.cursor.line_num,
         })
     }
 }

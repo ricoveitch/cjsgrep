@@ -19,10 +19,20 @@ mod tests {
             .stdout;
 
         let str_out = String::from_utf8_lossy(&bytes).to_string();
+        let expected_out = vec![
+            "const pin = 1;",
+            "abc(pin)",
+            "const abc = (pin) => {",
+            "let pin = 1;",
+            "//pin",
+        ];
         let mut lines: Vec<&str> = str_out.split("\n").collect();
         lines.pop();
 
-        assert_eq!(lines.len(), 3);
+        assert_eq!(lines.len(), expected_out.len());
+        for (line, expected) in lines.iter().zip(expected_out.iter()) {
+            assert_eq!(line.contains(expected), true);
+        }
     }
 
     // #[test]

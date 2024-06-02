@@ -48,30 +48,43 @@ fn is_whitespace(byte: u8) -> bool {
     }
 }
 
+#[derive(Clone)]
+pub struct Cursor {
+    pos: usize,
+    pub line_num: usize,
+    prev: TokenType,
+}
+
+impl Default for Cursor {
+    fn default() -> Self {
+        Self {
+            pos: 0,
+            line_num: 0,
+            prev: TokenType::Whitespace,
+        }
+    }
+}
+
 pub struct Lexer {
     src: Vec<u8>,
-    curr: TokenType,
-    pub cursor: usize,
-    pub line_num: usize,
+    pub cursor: Cursor,
 }
 
 impl Lexer {
     pub fn new(src: &str) -> Lexer {
         Lexer {
             src: src.as_bytes().to_owned(),
-            cursor: 0,
-            line_num: 0,
-            curr: TokenType::Whitespace,
+            cursor: Cursor::default(),
         }
     }
 
     fn peak_byte(&self, distance: usize) -> Option<&u8> {
-        self.src.get(self.cursor + distance)
+        self.src.get(self.cursor.pos + distance)
     }
 
     fn read_while(&self, mut pred: impl FnMut(&u8) -> bool, offset: usize) -> (Vec<u8>, usize) {
         let mut bytes = vec![];
-        for byte in self.src.iter().skip(self.cursor + offset) {
+        for byte in self.src.iter().skip(self.cursor.pos + offset) {
             if pred(byte) {
                 bytes.push(byte.clone())
             } else {
@@ -134,13 +147,13 @@ impl Lexer {
 
     pub fn next_token(&mut self) -> TokenType {
         loop {
-            if self.curr == TokenType::Newline {
-                self.line_num += 1;
+            if self.cursor.prev == TokenType::Newline {
+                self.cursor.line_num += 1;
             }
 
             let (token, bytes_read) = self.peak();
-            self.cursor += bytes_read;
-            self.curr = token.clone();
+            self.cursor.pos += bytes_read;
+            self.cursor.prev = token.clone();
 
             if token != TokenType::Whitespace {
                 return token;
@@ -150,7 +163,7 @@ impl Lexer {
 
     pub fn lookahead(&mut self, distance: usize) -> TokenType {
         let mut i = distance as u32;
-        let cursor_snapshot = self.cursor;
+        let cursor_snapshot = self.cursor.clone();
 
         loop {
             let token = self.next_token();

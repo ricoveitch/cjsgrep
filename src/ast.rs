@@ -65,24 +65,4 @@ impl ASTNode {
             ASTNode::Program(p) => p.end,
         }
     }
-
-    pub fn find_func(&self, name: &str) -> Result<&ASTNode, String> {
-        let prog_node = match self {
-            ASTNode::Program(prog) => prog,
-            _ => return Err("expected program".to_string()),
-        };
-
-        let start = prog_node.lines.iter().find(|node| {
-            if let ASTNode::FunctionStatement(fs) = node {
-                return &fs.name == name;
-            }
-            false
-        });
-
-        if let Some(start) = start {
-            return Ok(start);
-        }
-
-        return Err("function start not found".to_string());
-    }
 }

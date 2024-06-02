@@ -1,4 +1,4 @@
-use codegrep::{parser::Parser, visitor::ASTVisitor};
+use codegrep::visitor::ASTVisitor;
 use std::{fs, process};
 
 fn parse_file() {
@@ -11,11 +11,8 @@ fn parse_file() {
         }
     };
 
-    let program = Parser::new(&src).parse();
-    // println!("{:?}", program);
-
-    let mut visitor = ASTVisitor::new(&src, "pin");
-    let _ = visitor.search(&program, Some("foo"));
+    let mut visitor = ASTVisitor::new("pin");
+    let _ = visitor.search(src.as_str(), Some("foo")); // Some("foo")
 }
 
 fn main() {
