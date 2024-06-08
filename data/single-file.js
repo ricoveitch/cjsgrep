@@ -7,6 +7,10 @@ const arrow = () => {
   moo(pin);
 };
 
+const bar = () => {
+  // pin bar
+};
+
 function foo() {
   if (true) {
     const abc = () => {
@@ -17,6 +21,7 @@ function foo() {
   let pin = b;
   abc(pin);
   //pin
+  // bar()
   const abc = (pin) => {
     let pin = c;
   };

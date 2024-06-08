@@ -1,5 +1,6 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
+    Asterisk,
     CloseBraces,
     CloseParen,
     Comma,
@@ -9,6 +10,7 @@ pub enum TokenType {
     OpenParen,
     Newline,
     Whitespace,
+    ForwardSlash,
     EOF,
     String(String),
     CatchAll(String),
@@ -18,6 +20,7 @@ pub enum TokenType {
 impl std::fmt::Display for TokenType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match &self {
+            TokenType::Asterisk => "*",
             TokenType::CloseBraces => "}",
             TokenType::CloseParen => ")",
             TokenType::Comma => ",",
@@ -28,6 +31,7 @@ impl std::fmt::Display for TokenType {
             TokenType::OpenBraces => "{",
             TokenType::OpenParen => "(",
             TokenType::Whitespace => " ",
+            TokenType::ForwardSlash => "/",
             TokenType::Identifier(s) => return write!(f, "{}", s),
             TokenType::String(s) => return write!(f, "{}", s),
             TokenType::CatchAll(s) => s.as_str(),
@@ -130,6 +134,8 @@ impl Lexer {
         };
 
         match byte {
+            b'*' => (TokenType::Asterisk, 1),
+            b'/' => (TokenType::ForwardSlash, 1),
             b',' => (TokenType::Comma, 1),
             b'.' => (TokenType::Dot, 1),
             b'(' => (TokenType::OpenParen, 1),

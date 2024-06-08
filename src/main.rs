@@ -1,8 +1,8 @@
+use clap::{command, Arg};
 use codegrep::visitor::ASTVisitor;
-use std::{fs, process};
+use std::{env, fs, process};
 
-fn parse_file() {
-    let filename = "./data/parser-test.js";
+fn parse_file(filename: &str, pattern: &str, func_start: Option<&str>) {
     let src = match fs::read_to_string(filename) {
         Ok(s) => s,
         Err(err) => {
@@ -11,10 +11,33 @@ fn parse_file() {
         }
     };
 
-    let mut visitor = ASTVisitor::new("pin");
-    let _ = visitor.search(src.as_str(), Some("foo")); // Some("foo")
+    let mut visitor = ASTVisitor::new(pattern);
+    let _ = visitor.search(src.as_str(), func_start);
 }
 
 fn main() {
-    parse_file();
+    let matches = command!()
+        .arg(
+            Arg::new("pattern")
+                .required(true)
+                .help("the pattern to search for"),
+        )
+        .arg(
+            Arg::new("filepath")
+                .required(true)
+                .help("the starting filename"),
+        )
+        .arg(
+            Arg::new("function")
+                .short('n')
+                .long("function-name")
+                .help("the starting function name"),
+        )
+        .get_matches();
+
+    let pattern = matches.get_one::<String>("pattern").unwrap();
+    let filepath = matches.get_one::<String>("filepath").unwrap();
+    let func_start = matches.get_one::<String>("function");
+
+    parse_file(filepath, pattern, func_start.map(|s| s.as_str()));
 }

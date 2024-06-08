@@ -35,10 +35,10 @@ impl Parser {
         self.curr_token = self.lexer.next_token();
     }
 
-    fn advance_token_till(&mut self, token: TokenType) {
+    fn advance_token_till(&mut self, pred: impl Fn(&TokenType) -> bool) {
         self.advance_token();
         loop {
-            if self.curr_token == token {
+            if pred(&self.curr_token) {
                 break;
             }
             self.advance_token();
@@ -113,11 +113,36 @@ impl Parser {
                     _ => self.parse_identifier(ident.to_string()),
                 }
             }
+            TokenType::ForwardSlash => {
+                self.parse_backslash();
+                None
+            }
             _ => {
                 self.advance_token();
                 None
             }
         }
+    }
+
+    fn parse_backslash(&mut self) {
+        self.advance_token();
+
+        match &self.curr_token {
+            TokenType::Asterisk => loop {
+                self.advance_token_till(|t| t == &TokenType::Asterisk);
+                self.advance_token();
+                if self.curr_token == TokenType::ForwardSlash {
+                    return;
+                }
+            },
+            TokenType::ForwardSlash => {
+                self.advance_token_till(|t| match t {
+                    TokenType::Newline | TokenType::EOF => true,
+                    _ => false,
+                });
+            }
+            _ => (),
+        };
     }
 
     fn variable_statement(&mut self) -> Option<ASTNode> {
@@ -128,7 +153,7 @@ impl Parser {
 
         match &self.curr_token {
             TokenType::OpenParen => {
-                self.advance_token_till(TokenType::OpenBraces);
+                self.advance_token_till(|t| t == &TokenType::OpenBraces);
                 let body = self.block_statement();
 
                 Some(ASTNode::FunctionStatement(FunctionStatement {
@@ -149,7 +174,7 @@ impl Parser {
 
     fn call_expression(&mut self, base: ASTNode) -> ASTNode {
         let start = self.lexer.cursor.line_num;
-        self.advance_token_till(TokenType::CloseParen);
+        self.advance_token_till(|t| t == &TokenType::CloseParen);
         self.eat(&TokenType::CloseParen);
 
         let call_expression = ASTNode::CallExpression(CallExpression {
@@ -211,7 +236,7 @@ impl Parser {
         let start = self.lexer.cursor.line_num;
         self.advance_token();
         let name = self.eat_identifier();
-        self.advance_token_till(TokenType::OpenBraces);
+        self.advance_token_till(|t| t == &TokenType::OpenBraces);
         let body = self.block_statement();
 
         ASTNode::FunctionStatement(FunctionStatement {
