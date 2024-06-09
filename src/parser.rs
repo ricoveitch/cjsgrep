@@ -1,5 +1,8 @@
 use crate::{
-    ast::{ASTNode, BlockStatement, CallExpression, FunctionStatement, Identifier, Program},
+    ast::{
+        self, ASTNode, BlockStatement, CallExpression, FunctionStatement, Identifier,
+        ObjectPattern, Program, VariableExpression,
+    },
     lexer::{self, TokenType},
 };
 
@@ -24,25 +27,35 @@ impl Parser {
         self.program()
     }
 
-    fn lookahead(&mut self, distance: usize) -> TokenType {
-        match distance {
-            0 => self.curr_token.clone(),
-            _ => self.lexer.lookahead(distance),
-        }
-    }
+    // fn lookahead(&mut self, distance: usize) -> TokenType {
+    //     match distance {
+    //         0 => self.curr_token.clone(),
+    //         _ => self.lexer.lookahead(distance),
+    //     }
+    // }
 
     fn advance_token(&mut self) {
         self.curr_token = self.lexer.next_token();
     }
 
     fn advance_token_till(&mut self, pred: impl Fn(&TokenType) -> bool) {
-        self.advance_token();
         loop {
             if pred(&self.curr_token) {
                 break;
             }
             self.advance_token();
         }
+    }
+
+    fn advance_token_against(&mut self, target: Vec<TokenType>) -> bool {
+        for t in target {
+            if &self.curr_token != &t {
+                return false;
+            }
+            self.advance_token();
+        }
+
+        true
     }
 
     fn program(&mut self) -> ASTNode {
@@ -101,18 +114,16 @@ impl Parser {
     fn statement(&mut self) -> Option<ASTNode> {
         match &self.curr_token {
             TokenType::OpenBraces => Some(self.block_statement()),
-            TokenType::Identifier(ident) => {
-                match ident.as_str() {
-                    "function" => Some(self.function_expression()),
-                    "const" | "var" | "let" => self.variable_statement(),
-                    // TODO: if const|var|let check if arrow function
-                    "if" => {
-                        self.advance_token();
-                        None
-                    }
-                    _ => self.parse_identifier(ident.to_string()),
+            TokenType::Identifier(ident) => match ident.as_str() {
+                "function" => Some(self.function_expression()),
+                "const" | "var" | "let" => self.variable_statement(),
+                "module" => self.export_statement(),
+                "if" => {
+                    self.advance_token();
+                    None
                 }
-            }
+                _ => Some(self.parse_identifier(ident.to_string())),
+            },
             TokenType::ForwardSlash => {
                 self.parse_backslash();
                 None
@@ -121,6 +132,24 @@ impl Parser {
                 self.advance_token();
                 None
             }
+        }
+    }
+
+    fn export_statement(&mut self) -> Option<ASTNode> {
+        if !self.advance_token_against(vec![
+            TokenType::Identifier(String::from("module")),
+            TokenType::Dot,
+            TokenType::Identifier(String::from("exports")),
+            TokenType::Equals,
+        ]) {
+            return None;
+        }
+
+        match &self.curr_token {
+            TokenType::OpenBraces => {
+                Some(ASTNode::ExportStatement(self.object_pattern_expression()))
+            }
+            _ => None,
         }
     }
 
@@ -145,40 +174,109 @@ impl Parser {
         };
     }
 
+    fn object_pattern_expression(&mut self) -> ObjectPattern {
+        let obj_pat_start = self.lexer.cursor.line_num;
+        let mut properties = vec![];
+        self.eat(&TokenType::OpenBraces);
+
+        loop {
+            if &self.curr_token == &TokenType::Newline {
+                self.advance_token();
+            }
+
+            if &self.curr_token == &TokenType::CloseBraces {
+                self.advance_token();
+                break;
+            }
+
+            let key = self.eat_identifier();
+            let mut value = key.clone();
+
+            if &self.curr_token == &TokenType::Colon {
+                self.advance_token();
+                if let TokenType::Identifier(ident) = &self.curr_token {
+                    value = ident.clone();
+                    self.advance_token();
+                };
+            }
+
+            properties.push(ast::Property { key, value });
+
+            if &self.curr_token == &TokenType::Comma {
+                self.advance_token();
+            }
+        }
+
+        ObjectPattern {
+            properties,
+            start: obj_pat_start,
+            end: self.lexer.cursor.line_num,
+        }
+    }
+
+    fn arrow_function_statement(&mut self, name: &str) -> ASTNode {
+        let start = self.lexer.cursor.line_num;
+        self.advance_token_till(|t| t == &TokenType::OpenBraces);
+        let body = self.block_statement();
+
+        ASTNode::FunctionStatement(FunctionStatement {
+            name: String::from(name),
+            body: Box::new(body),
+            start,
+            end: self.lexer.cursor.line_num,
+        })
+    }
+
     fn variable_statement(&mut self) -> Option<ASTNode> {
         let start = self.lexer.cursor.line_num;
         self.advance_token();
-        let var_name = self.eat_identifier();
+
+        let lhs = match &self.curr_token {
+            TokenType::Identifier(ident) => self.parse_identifier(ident.clone()),
+            TokenType::OpenBraces => ASTNode::ObjectPattern(self.object_pattern_expression()),
+            _ => return None,
+        };
+
         self.eat(&TokenType::Equals);
 
         match &self.curr_token {
-            TokenType::OpenParen => {
-                self.advance_token_till(|t| t == &TokenType::OpenBraces);
-                let body = self.block_statement();
-
-                Some(ASTNode::FunctionStatement(FunctionStatement {
-                    name: var_name,
-                    body: Box::new(body),
-                    start,
-                    end: self.lexer.cursor.line_num,
-                }))
-            }
+            TokenType::OpenParen => match &lhs {
+                ASTNode::Identifier(ident) => Some(self.arrow_function_statement(&ident.name)),
+                _ => None,
+            },
             TokenType::OpenBraces => {
                 //TODO: object declaration...
                 None
             }
-            TokenType::Identifier(ident) => self.parse_identifier(ident.to_string()),
+            TokenType::Identifier(ident) => {
+                let rhs = self.parse_identifier(ident.to_string());
+                Some(ASTNode::VariableExpression(VariableExpression {
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                    start,
+                    end: self.lexer.cursor.line_num,
+                }))
+            }
             _ => None,
         }
     }
 
     fn call_expression(&mut self, base: ASTNode) -> ASTNode {
-        let start = self.lexer.cursor.line_num;
+        let start = base.get_start().to_owned();
+        self.eat(&TokenType::OpenParen);
+
+        // only care about the first parameter if its a string, for require().
+        let param = match &self.curr_token {
+            TokenType::String(s) => Some(s.to_owned()),
+            _ => None,
+        };
+
         self.advance_token_till(|t| t == &TokenType::CloseParen);
         self.eat(&TokenType::CloseParen);
 
         let call_expression = ASTNode::CallExpression(CallExpression {
             base: Box::new(base),
+            param,
             start,
             end: self.lexer.cursor.line_num,
         });
@@ -190,21 +288,18 @@ impl Parser {
         call_expression
     }
 
-    fn parse_identifier(&mut self, ident: String) -> Option<ASTNode> {
-        match self.lookahead(1) {
-            TokenType::OpenParen => {
-                let start = self.lexer.cursor.line_num;
-                self.advance_token();
-                Some(self.call_expression(ASTNode::Identifier(Identifier {
-                    name: ident,
-                    start,
-                    end: self.lexer.cursor.line_num,
-                })))
-            }
-            _ => {
-                self.advance_token();
-                None
-            }
+    fn parse_identifier(&mut self, ident: String) -> ASTNode {
+        let start = self.lexer.cursor.line_num;
+        let ident_node = ASTNode::Identifier(Identifier {
+            name: ident,
+            start,
+            end: self.lexer.cursor.line_num,
+        });
+        self.advance_token();
+
+        match &self.curr_token {
+            TokenType::OpenParen => self.call_expression(ident_node),
+            _ => ident_node,
         }
     }
 

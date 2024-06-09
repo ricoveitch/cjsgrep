@@ -86,6 +86,10 @@ impl ASTVisitor {
             ASTNode::Identifier(_) => (),
             ASTNode::FunctionStatement(fs) => self.visit_function(&fs, &file),
             ASTNode::Program(prog) => self.visit_prog(prog, &file),
+
+            ASTNode::ExportStatement(_) => (),
+            ASTNode::VariableExpression(_) => (),
+            ASTNode::ObjectPattern(_) => (),
         };
 
         let end = node.get_end();
