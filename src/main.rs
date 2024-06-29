@@ -1,18 +1,18 @@
 use clap::{command, Arg};
 use codegrep::visitor::ASTVisitor;
-use std::{env, fs, process};
+use std::env;
 
 fn parse_file(filename: &str, pattern: &str, func_start: Option<&str>) {
-    let src = match fs::read_to_string(filename) {
-        Ok(s) => s,
-        Err(err) => {
-            eprintln!("failed to read file: {}", err.to_string());
-            process::exit(1);
-        }
-    };
+    // let src = match fs::read_to_string(filename) {
+    //     Ok(s) => s,
+    //     Err(err) => {
+    //         eprintln!("failed to read file: {}", err.to_string());
+    //         process::exit(1);
+    //     }
+    // };
 
     let mut visitor = ASTVisitor::new(pattern);
-    let _ = visitor.search(src.as_str(), func_start);
+    let _ = visitor.search(filename, func_start);
 }
 
 fn main() {

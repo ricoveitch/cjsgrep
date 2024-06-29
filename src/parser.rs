@@ -12,7 +12,7 @@ pub struct Parser {
 }
 
 fn exit(message: &str) -> ! {
-    println!("{}", message);
+    eprintln!("{}", message);
     std::process::exit(1)
 }
 

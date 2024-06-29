@@ -94,4 +94,53 @@ impl ASTNode {
             ASTNode::ObjectPattern(op) | ASTNode::ExportStatement(op) => op.end,
         }
     }
+
+    pub fn find_function(&self, name: &str) -> Option<&ASTNode> {
+        let prog_lines = match self {
+            ASTNode::Program(prog) => &prog.lines,
+            _ => return None,
+        };
+
+        for node in prog_lines.as_ref() {
+            match node {
+                ASTNode::FunctionStatement(fs) if fs.name == name => return Some(node),
+                _ => (),
+            };
+        }
+
+        None
+    }
+
+    pub fn try_export_extract(&self) -> Option<(String, &ObjectPattern)> {
+        let ve = match self {
+            ASTNode::VariableExpression(ve) => ve,
+            _ => return None,
+        };
+
+        let ce = match ve.rhs.as_ref() {
+            ASTNode::CallExpression(ce) => ce,
+            _ => return None,
+        };
+
+        match &ce.base.as_ref() {
+            ASTNode::Identifier(ident) if ident.name == "require" => (),
+            _ => return None,
+        }
+
+        let require_file = if let Some(param) = &ce.param {
+            param
+        } else {
+            return None;
+        };
+
+        if !require_file.starts_with("./") && !require_file.starts_with("../") {
+            return None;
+        }
+
+        if let ASTNode::ObjectPattern(op) = ve.lhs.as_ref() {
+            return Some((String::from(require_file), op));
+        }
+
+        None
+    }
 }

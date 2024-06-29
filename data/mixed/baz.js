@@ -4,7 +4,7 @@ function baz(obj) {
 }
 
 function double(obj) {
-  obj.double = 1;
+  obj.baz = 2;
 }
 
 function takeUpSpaceWithFunctionName() {

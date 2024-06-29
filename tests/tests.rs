@@ -55,6 +55,21 @@ mod tests {
         test_search("data/comments.js", "pin", Some("foo"), vec!["pin = bar;"]);
     }
 
+    #[test]
+    fn multi_file() {
+        test_search(
+            "data/import-test.js",
+            "baz",
+            Some("foo"),
+            vec![
+                "baz();",
+                "function baz(obj) {",
+                "obj.baz = 1;",
+                "obj.baz = 2;",
+            ],
+        );
+    }
+
     // #[test]
     // fn single_destructure_import() {
     //     let results = search("obj.fixed");
