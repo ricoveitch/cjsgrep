@@ -62,9 +62,10 @@ mod tests {
             "baz",
             Some("foo"),
             vec![
-                "baz();",
+                "bazz();",
                 "function baz(obj) {",
                 "obj.baz = 1;",
+                "function baz2(obj) {",
                 "obj.baz = 2;",
             ],
         );

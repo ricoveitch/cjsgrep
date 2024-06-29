@@ -3,7 +3,7 @@ function baz(obj) {
   return obj;
 }
 
-function double(obj) {
+function baz2(obj) {
   obj.baz = 2;
 }
 
@@ -17,7 +17,7 @@ function takeUpSpaceWithFunctionName2() {
 
 module.exports = {
   baz,
-  double,
+  double: baz2,
   takeUpSpaceWithFunctionName,
   takeUpSpaceWithFunctionName2,
 };

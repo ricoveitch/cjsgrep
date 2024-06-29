@@ -143,4 +143,26 @@ impl ASTNode {
 
         None
     }
+
+    pub fn find_exported_func(&self, target: &str) -> Option<&ASTNode> {
+        let prog_lines = match self {
+            ASTNode::Program(prog) => &prog.lines,
+            _ => return None,
+        };
+
+        for node in prog_lines.as_ref() {
+            match node {
+                ASTNode::ExportStatement(es) => {
+                    for prop in &es.properties {
+                        if prop.key == target {
+                            return self.find_function(&prop.value);
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        None
+    }
 }

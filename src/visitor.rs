@@ -156,7 +156,7 @@ impl ASTVisitor {
         };
 
         for prop in &op.properties {
-            if let Some(func) = file.ast.find_function(&prop.key) {
+            if let Some(func) = file.ast.find_exported_func(&prop.key) {
                 self.scope.insert_symbol(
                     &prop.value,
                     Symbol {

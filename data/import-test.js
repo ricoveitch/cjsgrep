@@ -1,5 +1,6 @@
-const { baz } = require("./mixed/baz");
-const { double: d } = require("./mixed/baz");
+const { baz: bazz } = require("./mixed/baz");
+const { double } = require("./mixed/baz");
+const bazi = require("./mixed/baz");
 
 function moo() {
   //
@@ -7,8 +8,8 @@ function moo() {
 
 function foo() {
   moo();
-  baz();
+  bazz();
   if (something) {
-    d();
+    double();
   }
 }
