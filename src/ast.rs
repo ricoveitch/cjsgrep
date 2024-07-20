@@ -49,6 +49,17 @@ pub struct ObjectPattern {
     pub end: Line,
 }
 
+impl ObjectPattern {
+    pub fn get_value(&self, key: &str) -> Option<&String> {
+        for prop in &self.properties {
+            if prop.key == key {
+                return Some(&prop.value);
+            }
+        }
+        None
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BlockStatement {
     pub body: Box<Vec<ASTNode>>,
@@ -77,6 +88,16 @@ pub struct MemberExpression {
     pub property: String,
     pub start: Line,
     pub end: Line,
+}
+
+impl MemberExpression {
+    pub fn get_base(&self) -> &Identifier {
+        match self.base.as_ref() {
+            ASTNode::MemberExpression(me) => return me.get_base(),
+            ASTNode::Identifier(ident) => return ident,
+            _ => panic!("invalid membership expression"),
+        }
+    }
 }
 
 impl ASTNode {
@@ -122,7 +143,7 @@ impl ASTNode {
         None
     }
 
-    pub fn try_export_extract(&self) -> Option<(String, &ObjectPattern)> {
+    pub fn try_get_require_file(&self) -> Option<(String, &VariableExpression)> {
         let ve = match self {
             ASTNode::VariableExpression(ve) => ve,
             _ => return None,
@@ -148,29 +169,46 @@ impl ASTNode {
             return None;
         }
 
-        if let ASTNode::ObjectPattern(op) = ve.lhs.as_ref() {
-            return Some((String::from(require_file), op));
-        }
-
-        None
+        return Some((require_file.clone(), ve));
     }
 
-    pub fn find_exported_func(&self, target: &str) -> Option<&ASTNode> {
+    pub fn try_export_extract(&self) -> Option<(String, &ASTNode)> {
+        match self.try_get_require_file() {
+            Some(r) => Some((r.0, &r.1.lhs)),
+            None => None,
+        }
+    }
+
+    fn find_node(&self, pred: impl Fn(&ASTNode) -> bool) -> Option<&ASTNode> {
         let prog_lines = match self {
             ASTNode::Program(prog) => &prog.lines,
             _ => return None,
         };
 
         for node in prog_lines.as_ref() {
-            match node {
-                ASTNode::ExportStatement(es) => {
-                    for prop in &es.properties {
-                        if prop.key == target {
-                            return self.find_function(&prop.value);
-                        }
-                    }
-                }
-                _ => (),
+            if pred(node) {
+                return Some(node);
+            }
+        }
+
+        return None;
+    }
+
+    pub fn find_export_statement(&self) -> Option<&ObjectPattern> {
+        if let Some(ASTNode::ExportStatement(es)) = self.find_node(|node| match node {
+            ASTNode::ExportStatement(_) => true,
+            _ => false,
+        }) {
+            return Some(es);
+        }
+
+        None
+    }
+
+    pub fn find_exported_func(&self, target: &str) -> Option<&ASTNode> {
+        if let Some(es) = self.find_export_statement() {
+            if let Some(val) = es.get_value(target) {
+                return self.find_function(val);
             }
         }
 

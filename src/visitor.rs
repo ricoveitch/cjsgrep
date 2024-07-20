@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    ast::{ASTNode, BlockStatement, CallExpression, FunctionStatement, ObjectPattern, Program},
+    ast::{ASTNode, BlockStatement, CallExpression, FunctionStatement, Program},
     file_scope::{ProgramScope, Symbol},
     logger,
     parser::Parser,
@@ -132,20 +132,25 @@ impl ASTVisitor {
 
             ASTNode::ExportStatement(_) => (),
             ASTNode::VariableExpression(_) => (),
+            ASTNode::MemberExpression(_) => (),
             ASTNode::ObjectPattern(_) => (),
         };
+
+        // previous block statement has already exhausted everything and left the scope.
+        if let ASTNode::FunctionStatement(_) = node {
+            return;
+        }
 
         let end = node.get_end();
         self.grep(self.line_num, end);
         self.line_num = end;
 
-        match node {
-            ASTNode::BlockStatement(_) => self.scope.pop(),
-            _ => (),
-        };
+        if let ASTNode::BlockStatement(_) = node {
+            self.scope.pop()
+        }
     }
 
-    fn index_export(&mut self, required_file: &str, op: &ObjectPattern) {
+    fn index_export(&mut self, required_file: &str, lhs: &ASTNode) {
         let file = match self.files.get(required_file) {
             Some(file) => &file,
             None => {
@@ -155,25 +160,41 @@ impl ASTVisitor {
             }
         };
 
-        for prop in &op.properties {
-            if let Some(func) = file.ast.find_exported_func(&prop.key) {
-                self.scope.insert_symbol(
-                    &prop.value,
-                    Symbol {
-                        node: func.clone(),
-                        file_path: file.path.clone(),
-                    },
-                )
+        match lhs {
+            ASTNode::ObjectPattern(op) => {
+                for prop in &op.properties {
+                    if let Some(func) = file.ast.find_exported_func(&prop.key) {
+                        self.scope.insert_symbol(
+                            &prop.value,
+                            Symbol {
+                                node: func.clone(),
+                                file_path: file.path.clone(),
+                            },
+                        )
+                    }
+                }
             }
+            ASTNode::Identifier(ident) => {
+                if let Some(op) = file.ast.find_export_statement() {
+                    self.scope.insert_symbol(
+                        &ident.name,
+                        Symbol {
+                            node: ASTNode::ExportStatement(op.clone()),
+                            file_path: file.path.clone(),
+                        },
+                    )
+                }
+            }
+            _ => return,
         }
     }
 
     fn index_block(&mut self, lines: &Vec<ASTNode>) {
         let current_file = self.scope.current().unwrap().file_path.clone();
         for node in lines {
-            if let Some((required_file, op)) = node.try_export_extract() {
+            if let Some((required_file, lhs)) = node.try_export_extract() {
                 if let Some(full_path) = utils::join_path(&current_file, &required_file) {
-                    self.index_export(&full_path, op);
+                    self.index_export(&full_path, lhs);
                 }
             }
 
@@ -220,21 +241,40 @@ impl ASTVisitor {
     }
 
     fn visit_call_expression(&mut self, call_expr: &CallExpression) {
-        let ident = match call_expr.base.as_ref() {
-            ASTNode::Identifier(ident) => ident,
+        let (base_name, call_name) = match call_expr.base.as_ref() {
+            ASTNode::Identifier(ident) => (&ident.name, &ident.name),
+            ASTNode::MemberExpression(me) => (&me.get_base().name, &me.property),
             _ => return,
         };
 
-        if let Some(symbol) = self.scope.find_symbol(&ident.name).map(|s| s.clone()) {
-            if symbol.file_path != self.scope.current().unwrap().file_path {
-                if !self.push_file_scope(&symbol.file_path) {
-                    return;
-                }
-            }
+        let base_symbol = match self.scope.find_symbol(&base_name).map(|s| s.clone()) {
+            Some(symbol) => symbol,
+            None => return,
+        };
 
-            self.line_num = symbol.node.get_start();
-            self.visit_node(&symbol.node);
-            self.line_num = call_expr.start;
+        if base_symbol.file_path != self.scope.current().unwrap().file_path {
+            if !self.push_file_scope(&base_symbol.file_path) {
+                return;
+            }
         }
+
+        let func_name = match &base_symbol.node {
+            // TODO: handle nested member expressions e.g. foo.bar.baz()
+            ASTNode::ExportStatement(es) => match es.get_value(&call_name) {
+                Some(v) => v,
+                None => return,
+            },
+            ASTNode::FunctionStatement(fs) => &fs.name,
+            _ => return,
+        };
+
+        let func_symbol = match self.scope.find_symbol(&func_name).map(|s| s.clone()) {
+            Some(symbol) => symbol,
+            None => return,
+        };
+
+        self.line_num = func_symbol.node.get_start();
+        self.visit_node(&func_symbol.node);
+        self.line_num = call_expr.start;
     }
 }
