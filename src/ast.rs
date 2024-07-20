@@ -8,6 +8,7 @@ pub enum ASTNode {
     ObjectPattern(ObjectPattern),
     ExportStatement(ObjectPattern),
     Identifier(Identifier),
+    MemberExpression(MemberExpression),
 }
 
 type Line = usize;
@@ -70,6 +71,14 @@ pub struct Identifier {
     pub end: Line,
 }
 
+#[derive(Debug, Clone)]
+pub struct MemberExpression {
+    pub base: Box<ASTNode>,
+    pub property: String,
+    pub start: Line,
+    pub end: Line,
+}
+
 impl ASTNode {
     pub fn get_start(&self) -> usize {
         match self {
@@ -79,6 +88,7 @@ impl ASTNode {
             ASTNode::FunctionStatement(fs) => fs.start,
             ASTNode::Program(p) => p.start,
             ASTNode::VariableExpression(ve) => ve.start,
+            ASTNode::MemberExpression(me) => me.start,
             ASTNode::ObjectPattern(op) | ASTNode::ExportStatement(op) => op.start,
         }
     }
@@ -91,6 +101,7 @@ impl ASTNode {
             ASTNode::FunctionStatement(fs) => fs.end,
             ASTNode::Program(p) => p.end,
             ASTNode::VariableExpression(ve) => ve.end,
+            ASTNode::MemberExpression(me) => me.end,
             ASTNode::ObjectPattern(op) | ASTNode::ExportStatement(op) => op.end,
         }
     }

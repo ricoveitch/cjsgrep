@@ -1,7 +1,7 @@
 use crate::{
     ast::{
         self, ASTNode, BlockStatement, CallExpression, FunctionStatement, Identifier,
-        ObjectPattern, Program, VariableExpression,
+        MemberExpression, ObjectPattern, Program, VariableExpression,
     },
     lexer::{self, TokenType},
 };
@@ -82,20 +82,14 @@ impl Parser {
         previous_token
     }
 
-    fn eat_identifier(&mut self) -> String {
+    fn eat_identifier(&mut self) -> Option<String> {
         let curr_token = self.curr_token.clone();
         match curr_token {
             TokenType::Identifier(ident) => {
                 self.advance_token();
-                ident
+                Some(ident)
             }
-            _ => exit(
-                format!(
-                    "unexpected token '{}', expected an identifier",
-                    self.curr_token
-                )
-                .as_str(),
-            ),
+            _ => None,
         }
     }
 
@@ -115,7 +109,7 @@ impl Parser {
         match &self.curr_token {
             TokenType::OpenBraces => Some(self.block_statement()),
             TokenType::Identifier(ident) => match ident.as_str() {
-                "function" => Some(self.function_expression()),
+                "function" => self.function_expression(),
                 "const" | "var" | "let" => self.variable_statement(),
                 "module" => self.export_statement(),
                 "if" => {
@@ -189,7 +183,11 @@ impl Parser {
                 break;
             }
 
-            let key = self.eat_identifier();
+            let key = match self.eat_identifier() {
+                Some(ident) => ident,
+                None => break,
+            };
+
             let mut value = key.clone();
 
             if &self.curr_token == &TokenType::Colon {
@@ -281,10 +279,6 @@ impl Parser {
             end: self.lexer.cursor.line_num,
         });
 
-        if self.curr_token == TokenType::Dot {
-            //return self.member_expression(call_expression);
-        }
-
         call_expression
     }
 
@@ -299,8 +293,46 @@ impl Parser {
 
         match &self.curr_token {
             TokenType::OpenParen => self.call_expression(ident_node),
+            TokenType::Dot => self.member_expression(ident_node),
             _ => ident_node,
         }
+    }
+
+    fn member_expression(&mut self, base: ASTNode) -> ASTNode {
+        let mut base = base;
+        loop {
+            let (new_base, more) = self.member_prefix_expression(base);
+            base = new_base;
+            if !more {
+                break;
+            }
+        }
+
+        base
+    }
+
+    fn member_prefix_expression(&mut self, base: ASTNode) -> (ASTNode, bool) {
+        let expression = match &self.curr_token {
+            &TokenType::Dot => {
+                self.eat(&TokenType::Dot);
+                let property = match self.eat_identifier() {
+                    Some(ident) => ident,
+                    None => return (base, false),
+                };
+                let me = MemberExpression {
+                    base: Box::new(base),
+                    property,
+                    start: 0,
+                    end: 0,
+                };
+
+                ASTNode::MemberExpression(me)
+            }
+            &TokenType::OpenParen => self.call_expression(base),
+            _ => return (base, false),
+        };
+
+        (expression, true)
     }
 
     fn block_body(&mut self) -> Vec<ASTNode> {
@@ -327,18 +359,21 @@ impl Parser {
         })
     }
 
-    fn function_expression(&mut self) -> ASTNode {
+    fn function_expression(&mut self) -> Option<ASTNode> {
         let start = self.lexer.cursor.line_num;
         self.advance_token();
-        let name = self.eat_identifier();
+        let name = match self.eat_identifier() {
+            Some(ident) => ident,
+            None => return None,
+        };
         self.advance_token_till(|t| t == &TokenType::OpenBraces);
         let body = self.block_statement();
 
-        ASTNode::FunctionStatement(FunctionStatement {
+        Some(ASTNode::FunctionStatement(FunctionStatement {
             name,
             body: Box::new(body),
             start,
             end: self.lexer.cursor.line_num,
-        })
+        }))
     }
 }
