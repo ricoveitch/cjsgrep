@@ -1,7 +1,7 @@
 use std::process;
 
 fn test_search(filename: &str, pattern: &str, func_start: Option<&str>, expected_out: Vec<&str>) {
-    let mut cmd = process::Command::new("target/debug/codegrep");
+    let mut cmd = process::Command::new("target/debug/cjsgrep");
     cmd.arg(pattern).arg(filename);
 
     if let Some(func_start) = func_start {

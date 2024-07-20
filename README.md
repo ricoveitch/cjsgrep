@@ -1,9 +1,10 @@
-# codegrep
+# cjsgrep
 
-Static analysis prototype for grepping in CommonJS modules. Given a function and a pattern, branch on function calls to find any
+Static analysis prototype for grepping in a CommonJS project. Given a pattern and starting point, cjsgrep will follow function calls to find any
 instances of the pattern.
 
 ## TODO
 
+- Nested member expression imports
+- Nested object destructuring
 - Case sensitivity toggle.
-- Migrate use of regex to a js language parser.
